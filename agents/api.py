@@ -2,11 +2,12 @@
 FastAPI REST API Server for Naranjo Adr Probability.
 """
 from typing import Dict, Any, List
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
 from .base import AuditLogger, PHIGuard
 from .models import SystemTaskPayload, ConsensusDossier
 from .supervisor import SystemSupervisor
+from .metrics import GLOBAL_METRICS
 
 supervisor = SystemSupervisor(model_provider="mock")
 
@@ -28,11 +29,10 @@ def health():
 
 @app.get("/metrics")
 def metrics():
-    return {
-        "dossiers_processed_total": len(supervisor.dossier_registry),
-        "audit_blocks_total": len(AuditLogger.get_trail()),
-        "system_status": "NOMINAL_OPTIMAL"
-    }
+    """Prometheus metrics endpoint returning text format."""
+    GLOBAL_METRICS.audit_blocks_total = len(AuditLogger.get_trail())
+    prometheus_text = GLOBAL_METRICS.export_prometheus_text()
+    return Response(content=prometheus_text, media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 @app.post("/api/audit")

@@ -1,115 +1,137 @@
-# Naranjo Adr Probability
+# Naranjo ADR Probability
 
-> **Domain:** Clinical Decision Support & Biomedical Computing  
-> **Reference Guidelines & Standards:** `Standard Clinical Formulations & ISO/IEC Quality Frameworks`
+> **Domain:** Clinical Decision Support & Biomedical Computing
 
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
-![Audit Trail](https://img.shields.io/badge/Audit-HMAC--SHA256_Tamper--Evident-brightgreen.svg)
-![Zero-PHI Guard](https://img.shields.io/badge/Guard-Zero--PHI_Outbound-blue.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
 
 </div>
 
 ---
 
-## 📖 What It Does
+## What It Does
 
-Naranjo ADR Probability Scale
-Naranjo ( -4 to +13) adverse drug reaction probability with doubt/possible/probable/definite.
-Points-based score with tiered action thresholds. Stdlib only.
+Naranjo ADR Probability Scale calculator. Implements the Naranjo algorithm (-4 to +13) for assessing adverse drug reaction probability with categories: doubtful / possible / probable / definite. Points-based scoring with tiered action thresholds.
 
 ---
 
-## ⚙️ Key Capabilities & Algorithmic Modules
+## Project Structure
 
-### 🔬 Analytical Functions
-
-- **`calculate_score()`**: present: dict factor->bool or row dict with 1/0.
-- **`assess_row()`** — calculates and validates assess_row parameters.
-- **`process_csv()`** — calculates and validates process_csv parameters.
-- **`build_parser()`** — calculates and validates build_parser parameters.
-- **`main()`** — calculates and validates main parameters.
-
----
-
-## 📐 Mathematical Formulation & Logic
-
-```text
-  return calculate_score(present)
-  res=calculate_score(present); print(res); return 0
 ```
-
+naranjo-adr-probability/
+├── naranjo.py          # Core scoring algorithm (stdlib only)
+├── cli.py              # Multi-command CLI (audit, chat, batch, serve)
+├── enrichment.py       # Longitudinal tracking, EHR/FHIR, reporting modules
+├── simulator.py        # High-throughput batch simulation
+├── agents/
+│   ├── base.py         # PHI guard, HMAC-SHA256 audit trail
+│   ├── models.py       # Pydantic schemas
+│   ├── supervisor.py   # Multi-agent orchestrator
+│   ├── workers.py      # QC, Safety, Protocol conformance workers
+│   ├── api.py          # FastAPI REST server
+│   ├── metrics.py      # Prometheus metrics exporter
+│   ├── learning.py     # Bayesian calibration engine
+│   ├── llm_factory.py  # LLM provider abstraction
+│   └── streamer.py     # WebSocket telemetry broadcaster
+├── tests/              # Pytest test suite
+├── web/index.html      # Operations console UI
+├── Dockerfile
+└── docker-compose.yml
 ---
 
-## 💻 CLI Quickstart & Usage
+## Installation
 
-### 1. Guided Interactive Mode
 ```bash
-python cli.py
+pip install -e ".[dev]"
 ```
 
-### 2. Direct Parameterized Evaluation
+---
+
+## Usage
+
+### 1. Single Case Assessment
+
 ```bash
-python cli.py --task-id <value> --target <value> --primary <value> --secondary <value>
+# Using CLI flags
+python naranjo.py single --hypotension 1 --tachycardia 1
+
+# Using JSON input
+python naranjo.py single --json '{"Hypotension": true, "Fever": true}'
 ```
 
-### Parameter Reference
-- `--task-id`: Specifies input measurement or parameter value.
-- `--target`: Specifies input measurement or parameter value.
-- `--primary`: Specifies input measurement or parameter value.
-- `--secondary`: Specifies input measurement or parameter value.
-- `--critical`: Specifies input measurement or parameter value.
-- `--status`: Specifies input measurement or parameter value.
-- `--input`: Specifies input measurement or parameter value.
-- `--output`: Specifies input measurement or parameter value.
+### 2. Batch CSV Processing
 
-### Input Data Schema
+```bash
+python naranjo.py batch --input sample.csv --output results.csv
+```
 
-| Field | Description | Requirement |
-|:------|:------------|:------------|
-| `patient_id` | Parameter / observation metric | Required |
-| `age` | Parameter / observation metric | Required |
-| `sex` | Parameter / observation metric | Required |
-| `prior_vte` | Parameter / observation metric | Required |
-| `cancer` | Parameter / observation metric | Required |
-| `immobility` | Parameter / observation metric | Required |
-| `surgery` | Parameter / observation metric | Required |
+### 3. Enterprise CLI
+
+```bash
+# Audit task evaluation
+python cli.py audit --task-id TASK-001 --primary 28.5 --critical
+
+# Batch processing
+python cli.py batch -i sample.csv -o results.csv
+
+# Verify audit trail
+python cli.py verify-audit
+```
+
+### 4. REST API Server
+
+```bash
+# Direct
+python cli.py serve --host 127.0.0.1 --port 8000
+
+# Docker
+docker-compose up --build
+```
+
+API Endpoints:
+- `GET /health` - Health check
+- `GET /metrics` - Prometheus metrics
+- `POST /api/audit` - Submit task evaluation
+- `POST /api/chat` - Supervisor chat query
+- `GET /api/audit/logs` - Audit trail with integrity verification
+
+### 5. Simulation Benchmark
+
+```bash
+python simulator.py 1000
+```
 
 ---
 
-## 🛡️ Security & Enterprise Architecture
-
-* **Zero-PHI Outbound Interceptor:** Active AST and regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers.
-* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation and state transition.
-* **Air-Gapped LLM Reasoning Adapter:** Agnostic integration for local Ollama instances (`llama3`, `mistral`), Claude 3.5 Sonnet, GPT-4o, and deterministic test mocks.
-* **Active Learning Bayesian Calibration:** Dynamic tracker updating worker reliability weights and monitoring Brier calibration drift.
-* **FastAPI & Prometheus Telemetry:** Exposes OpenAPI 3.1 REST endpoints and operational Prometheus metrics (`/metrics`).
-
----
-
-## 🧪 Testing & Verification
-
-Run the automated test suite:
+## Testing
 
 ```bash
 pytest -v
 ```
 
-Execute high-throughput batch simulation benchmarks:
+---
 
-```bash
-python simulator.py --tasks 1000 --concurrency 8
-```
+## Security
+
+- **Zero-PHI Outbound Guard:** AST and regex inspection blocking SSNs, MRNs, phone numbers, emails, and patient identifiers.
+- **HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation.
+- **Path Traversal Protection:** All file operations validate paths against traversal attacks.
+- **No Hardcoded Secrets:** Audit key sourced from `AUDIT_SECRET_KEY` environment variable.
+
+### Environment Variables
+
+| Variable | Description | Required |
+|:---------|:------------|:---------|
+| `AUDIT_SECRET_KEY` | HMAC-SHA256 key for audit trail | Recommended |
+| `MODEL_PROVIDER` | LLM provider (mock/ollama/claude/openai) | No (default: mock) |
+
+Copy `.env.example` to `.env` and configure for production.
 
 ---
 
-## 🐳 Container Deployment
+## License
 
-```bash
-docker build -t naranjo-adr-probability .
-docker run -p 8000:8000 naranjo-adr-probability
-```
+MIT
