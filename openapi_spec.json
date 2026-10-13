@@ -1,112 +1,97 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Naranjo Adr Probability API",
-    "description": "Enterprise Distributed Component Platform (Clinical & Cryptographic AI) adhering to CAP / CLSI / NIST Standards.",
-    "version": "3.0.0-ENTERPRISE",
-    "contact": {
-      "name": "Dr. Abu Suraih Sakhri",
-      "url": "https://github.com/abusuraihsakhri"
-    }
+    "title": "Naranjo ADR Probability API",
+    "description": "Ten-question Naranjo causality scoring plus separate demonstration operations endpoints.",
+    "version": "1.1.0"
   },
   "paths": {
     "/health": {
       "get": {
-        "summary": "Health and metadata check",
+        "summary": "Health check",
         "responses": {
           "200": {
-            "description": "System optimal"
+            "description": "Service status"
+          }
+        }
+      }
+    },
+    "/api/naranjo": {
+      "post": {
+        "summary": "Score an explicitly completed Naranjo questionnaire",
+        "description": "Responses q1 through q10 must each be yes, no, or unknown. Missing or invalid values return HTTP 422.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "responses"
+                ],
+                "properties": {
+                  "responses": {
+                    "type": "object",
+                    "description": "Mapping containing q1 through q10 as yes, no or unknown",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Causality score and itemized contributions"
+          },
+          "422": {
+            "description": "Missing or invalid answers"
           }
         }
       }
     },
     "/metrics": {
       "get": {
-        "summary": "Prometheus operational metrics",
+        "summary": "Text-format operational counters",
         "responses": {
           "200": {
-            "description": "Prometheus text metrics"
+            "description": "Prometheus metrics"
           }
         }
       }
     },
     "/api/audit": {
       "post": {
-        "summary": "Dispatch task payload across specialized workers",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "task_id": {
-                    "type": "string"
-                  },
-                  "target_identifier": {
-                    "type": "string"
-                  },
-                  "primary_metric": {
-                    "type": "number"
-                  },
-                  "secondary_metric": {
-                    "type": "number"
-                  },
-                  "status_descriptor": {
-                    "type": "string"
-                  },
-                  "is_critical_flag": {
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "task_id",
-                  "target_identifier",
-                  "primary_metric"
-                ]
-              }
-            }
-          }
-        },
+        "summary": "Evaluate demonstration operations task",
+        "description": "This endpoint is not the Naranjo causality questionnaire.",
         "responses": {
           "200": {
-            "description": "Consensus dossier with HMAC signature"
+            "description": "Operations dossier"
+          },
+          "422": {
+            "description": "Invalid task"
           }
         }
       }
     },
     "/api/chat": {
       "post": {
-        "summary": "Air-gapped supervisory conversational assistant",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "query": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "query"
-                ]
-              }
-            }
-          }
-        },
+        "summary": "Query demonstration mock supervisory interface",
         "responses": {
           "200": {
-            "description": "Supervisory response"
+            "description": "Demonstration reply"
           }
         }
       }
     },
     "/api/audit/logs": {
       "get": {
-        "summary": "Retrieve and cryptographically verify HMAC audit trail",
+        "summary": "Read in-memory audit metadata and integrity result",
         "responses": {
           "200": {
-            "description": "Cryptographic audit trail"
+            "description": "Audit records"
           }
         }
       }
