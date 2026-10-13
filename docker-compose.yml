@@ -1,14 +1,11 @@
-version: '3.8'
-
 services:
   naranjo-adr-probability:
     build: .
     container_name: naranjo-adr-probability
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       - AUDIT_SECRET_KEY=${AUDIT_SECRET_KEY:?AUDIT_SECRET_KEY must be set in .env file}
-      - MODEL_PROVIDER=mock
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
