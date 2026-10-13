@@ -1,137 +1,65 @@
-# Naranjo ADR Probability
+# Naranjo ADR Probability Scale
 
-> **Domain:** Clinical Decision Support & Biomedical Computing
+A ten-question adverse drug reaction (ADR) causality questionnaire with a standalone browser calculator, Python library/CLI, CSV batch scoring, and a FastAPI endpoint.
 
-<div align="center">
+The questionnaire uses the published Naranjo weights. Each answer is **Yes**, **No**, or **Do not know** (0 points). The total can range from **−4 to +13**, with conventional interpretations:
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
+| Total | Category |
+|---|---|
+| ≤0 | Doubtful |
+| 1–4 | Possible |
+| 5–8 | Probable |
+| ≥9 | Definite |
 
-</div>
+These labels describe structured causality assessment, **not** adverse-event severity, a calibrated percentage probability, or a management recommendation. Clinical judgment is required. Never perform unsafe rechallenge or placebo exposure merely to complete a questionnaire.
 
----
+## Browser calculator
 
-## What It Does
+Open `docs/index.html` in a modern browser, or use the GitHub Pages deployment when available. Select a response to each question, calculate the category, and optionally export the answers and score as CSV or print the assessment.
 
-Naranjo ADR Probability Scale calculator. Implements the Naranjo algorithm (-4 to +13) for assessing adverse drug reaction probability with categories: doubtful / possible / probable / definite. Points-based scoring with tiered action thresholds.
+All browser calculations use native JavaScript. No Python runtime, external CDN, backend, personal identifiers, cookies, analytics, or browser storage is required. Input stays in the current browser tab unless the user exports or prints it. The same calculator is in `web/index.html`.
 
----
+## Python installation and use
 
-## Project Structure
-
-```
-naranjo-adr-probability/
-├── naranjo.py          # Core scoring algorithm (stdlib only)
-├── cli.py              # Multi-command CLI (audit, chat, batch, serve)
-├── enrichment.py       # Longitudinal tracking, EHR/FHIR, reporting modules
-├── simulator.py        # High-throughput batch simulation
-├── agents/
-│   ├── base.py         # PHI guard, HMAC-SHA256 audit trail
-│   ├── models.py       # Pydantic schemas
-│   ├── supervisor.py   # Multi-agent orchestrator
-│   ├── workers.py      # QC, Safety, Protocol conformance workers
-│   ├── api.py          # FastAPI REST server
-│   ├── metrics.py      # Prometheus metrics exporter
-│   ├── learning.py     # Bayesian calibration engine
-│   ├── llm_factory.py  # LLM provider abstraction
-│   └── streamer.py     # WebSocket telemetry broadcaster
-├── tests/              # Pytest test suite
-├── web/index.html      # Operations console UI
-├── Dockerfile
-└── docker-compose.yml
----
-
-## Installation
+Requires Python **3.10+**.
 
 ```bash
-pip install -e ".[dev]"
-```
+python -m pip install -e ".[dev]"
+python -m pytest -q
 
----
+# Ten-item JSON assessment
+python naranjo.py single --json '{"q1":"yes","q2":"yes","q3":"unknown","q4":"unknown","q5":"no","q6":"unknown","q7":"unknown","q8":"yes","q9":"unknown","q10":"yes"}'
 
-## Usage
-
-### 1. Single Case Assessment
-
-```bash
-# Using CLI flags
-python naranjo.py single --hypotension 1 --tachycardia 1
-
-# Using JSON input
-python naranjo.py single --json '{"Hypotension": true, "Fever": true}'
-```
-
-### 2. Batch CSV Processing
-
-```bash
+# Score the included CSV example
 python naranjo.py batch --input sample.csv --output results.csv
 ```
 
-### 3. Enterprise CLI
+CSV inputs require columns `q1` to `q10` (case-insensitive), each containing `yes`, `no`, or `unknown`. Additional columns such as `case_id` are retained. Missing or ambiguous responses cause validation errors rather than implicit “No” scores.
+
+## REST API
+
+Start the optional FastAPI server with:
 
 ```bash
-# Audit task evaluation
-python cli.py audit --task-id TASK-001 --primary 28.5 --critical
-
-# Batch processing
-python cli.py batch -i sample.csv -o results.csv
-
-# Verify audit trail
-python cli.py verify-audit
-```
-
-### 4. REST API Server
-
-```bash
-# Direct
 python cli.py serve --host 127.0.0.1 --port 8000
-
-# Docker
-docker-compose up --build
 ```
 
-API Endpoints:
-- `GET /health` - Health check
-- `GET /metrics` - Prometheus metrics
-- `POST /api/audit` - Submit task evaluation
-- `POST /api/chat` - Supervisor chat query
-- `GET /api/audit/logs` - Audit trail with integrity verification
+Use `POST /api/naranjo` with a JSON body containing `responses`, a mapping of `q1` through `q10`. The response includes the numeric score, category, and per-question points. FastAPI exposes interactive schema documentation at `/docs`.
 
-### 5. Simulation Benchmark
+The existing `cli.py audit/chat/batch`, `agents/`, `simulator.py`, and `enrichment.py` provide *separate demonstration operations workflows*. Their generic metrics, heuristics, mock conversational replies, and threshold alerts **are not Naranjo causality scoring and are not validated for clinical decision-making**.
 
-```bash
-python simulator.py 1000
-```
+## Security and privacy
 
----
+The browser calculator transmits nothing. The optional API processes data server-side: avoid identifiable clinical data without appropriate infrastructure, access controls, and a privacy review. The backend includes **best-effort pattern-based identifier screening**, not comprehensive de-identification or a HIPAA compliance guarantee. The HMAC audit chain is **in memory**, uses a random ephemeral key by default, and does not persist across restarts. Set `AUDIT_SECRET_KEY` securely for a stable signing key; never commit secrets.
 
-## Testing
+The GitHub Actions workflow tests Python 3.10–3.12 and checks the browser JavaScript. A separate Pages workflow deploys `docs/` when GitHub Pages is enabled.
 
-```bash
-pytest -v
-```
+## Reference and limitations
 
----
+Naranjo CA et al. *A method for estimating the probability of adverse drug reactions.* Clin Pharmacol Ther. 1981;30(2):239–245. The [NIH/NLM LiverTox table](https://www.ncbi.nlm.nih.gov/books/NBK548069/table/Narajo.Tc/) gives the official 10-item response weights.
 
-## Security
-
-- **Zero-PHI Outbound Guard:** AST and regex inspection blocking SSNs, MRNs, phone numbers, emails, and patient identifiers.
-- **HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation.
-- **Path Traversal Protection:** All file operations validate paths against traversal attacks.
-- **No Hardcoded Secrets:** Audit key sourced from `AUDIT_SECRET_KEY` environment variable.
-
-### Environment Variables
-
-| Variable | Description | Required |
-|:---------|:------------|:---------|
-| `AUDIT_SECRET_KEY` | HMAC-SHA256 key for audit trail | Recommended |
-| `MODEL_PROVIDER` | LLM provider (mock/ollama/claude/openai) | No (default: mock) |
-
-Copy `.env.example` to `.env` and configure for production.
-
----
+This tool does not establish causation and does not replace specialty-specific assessment methods or clinical review.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
