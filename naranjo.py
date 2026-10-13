@@ -1,242 +1,129 @@
 #!/usr/bin/env python3
-"""
-Naranjo ADR Probability Scale
-Naranjo (-4 to +13) adverse drug reaction probability with doubt/possible/probable/definite.
-Points-based score with tiered action thresholds. Stdlib only.
+"""Naranjo adverse drug reaction probability scale (ten-question form).
+
+Point values follow the NCBI LiverTox published questionnaire. This is a
+causality aid, not an ADR severity or treatment decision scale.
 """
 import argparse
 import csv
+import json
 import os
 import sys
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
-# Clinical factors assessed in the Naranjo ADR scale
-FACTORS = [
-    ("Hypotension", 1),
-    ("Tachycardia", 1),
-    ("Tachypnea", 1),
-    ("Fever", 1),
-    ("Altered_mental", 1),
-]
-
-# Score thresholds: (max_score, tier_label)
-THRESHOLDS = [(2, "low"), (4, "moderate"), (100, "high")]
-
-# Naranjo probability categories
-CATEGORIES = [
-    (0, "doubtful"),      # score <= 0
-    (4, "possible"),      # score 1-4
-    (8, "probable"),      # score 5-8
-    (13, "definite"),     # score >= 9
-]
+# (key, question, yes points, no points); unknown always contributes zero.
+QUESTIONS = (
+    ("q1", "Previous conclusive reports of this reaction?", 1, 0),
+    ("q2", "Adverse event appeared after the suspected drug was given?", 2, -1),
+    ("q3", "Reaction improved after withdrawal or a specific antagonist?", 1, 0),
+    ("q4", "Reaction reappeared after readministration?", 2, -1),
+    ("q5", "Other causes could independently explain the reaction?", -1, 2),
+    ("q6", "Reaction reappeared after placebo administration?", -1, 1),
+    ("q7", "Drug detected at toxic concentration in blood or other fluids?", 1, 0),
+    ("q8", "Reaction changed in severity with a change in dose?", 1, 0),
+    ("q9", "Similar reaction to same or related drug on previous exposure?", 1, 0),
+    ("q10", "Adverse event supported by objective evidence?", 1, 0),
+)
+QUESTION_IDS = tuple(q[0] for q in QUESTIONS)
 
 
-def _normalize_value(val) -> bool:
-    """Convert various input types to boolean presence indicator."""
-    if val is None:
-        return False
-    if isinstance(val, bool):
-        return val
-    if isinstance(val, (int, float)):
-        return val != 0
-    s = str(val).strip().lower()
-    return s in ("1", "true", "yes", "y", "present", "positive")
+def _answer(value: Any) -> str:
+    """Normalize explicit yes/no/unknown responses; reject ambiguous values."""
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if value is None:
+        return "unknown"
+    if isinstance(value, str):
+        norm = value.strip().lower()
+        if norm in ("yes", "y"):
+            return "yes"
+        if norm in ("no", "n"):
+            return "no"
+        if norm in ("unknown", "do not know", "don't know", "not known", "na", "n/a"):
+            return "unknown"
+    raise ValueError(f"Invalid response {value!r}; use yes, no, or unknown")
 
 
-def calculate_score(present: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Calculate Naranjo ADR score from present factors.
-
-    Args:
-        present: dict mapping factor name to presence indicator (bool, 1/0, yes/no)
-
-    Returns:
-        dict with score, tier, category, and detail of contributing factors
-    """
-    if not isinstance(present, dict):
-        raise TypeError(f"present must be a dict, got {type(present).__name__}")
-
+def calculate_score(responses: Dict[str, Any]) -> Dict[str, Any]:
+    """Score q1..q10 answers. Explicit unknown scores zero; missing is an error."""
+    if not isinstance(responses, dict):
+        raise TypeError("responses must be a dictionary")
+    missing = [key for key in QUESTION_IDS if key not in responses]
+    if missing:
+        raise ValueError("Missing Naranjo answers: " + ", ".join(missing))
+    detail = {}
     score = 0
-    detail: Dict[str, int] = {}
-
-    for name, weight in FACTORS:
-        # Accept factor name in various formats
-        val = present.get(name)
-        if val is None:
-            val = present.get(name.lower())
-        if val is None:
-            val = present.get(name.replace("_", " "))
-        if val is None:
-            val = present.get(name.replace("_", " ").lower())
-
-        if _normalize_value(val):
-            score += weight
-            detail[name] = weight
-
-    # Determine tier
-    tier = "high"
-    for thr, label in THRESHOLDS:
-        if score <= thr:
-            tier = label
-            break
-
-    # Determine Naranjo category
-    category = "definite"
-    for max_score, cat_label in CATEGORIES:
-        if score <= max_score:
-            category = cat_label
-            break
-
-    return {"score": score, "tier": tier, "category": category, "detail": detail}
+    for key, question, yes_points, no_points in QUESTIONS:
+        answer = _answer(responses[key])
+        points = {"yes": yes_points, "no": no_points, "unknown": 0}[answer]
+        detail[key] = {"question": question, "answer": answer, "points": points}
+        score += points
+    category = "definite" if score >= 9 else "probable" if score >= 5 else "possible" if score >= 1 else "doubtful"
+    return {"score": score, "category": category, "detail": detail}
 
 
-def assess_row(row: Dict[str, str]) -> Dict[str, Any]:
-    """
-    Assess a CSV row dict and compute the Naranjo score.
-
-    Args:
-        row: dict from csv.DictReader
-
-    Returns:
-        score result dict
-    """
+def assess_row(row: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(row, dict):
-        raise TypeError(f"row must be a dict, got {type(row).__name__}")
-
-    # Build normalized present dict with original and lowercase keys
-    present: Dict[str, Any] = {}
-    for k, v in row.items():
-        if k is None:
-            continue
-        present[k] = v
-        present[k.lower()] = v
-
-    return calculate_score(present)
-
-
-def _validate_safe_path(path: str, must_exist: bool = False) -> str:
-    """
-    Validate that a path is safe (no traversal) and optionally exists.
-
-    Args:
-        path: file path to validate
-        must_exist: if True, raise FileNotFoundError when path doesn't exist
-
-    Returns:
-        resolved absolute path
-
-    Raises:
-        ValueError: if path contains traversal attempts
-        FileNotFoundError: if must_exist and path doesn't exist
-    """
-    resolved = os.path.realpath(os.path.abspath(path))
-
-    # Check for null bytes (can bypass some checks)
-    if "\x00" in path:
-        raise ValueError("Path contains null bytes")
-
-    if must_exist and not os.path.isfile(resolved):
-        raise FileNotFoundError(f"Input file not found: {path}")
-
-    return resolved
+        raise TypeError("row must be a dictionary")
+    return calculate_score({str(k).strip().lower(): v for k, v in row.items() if k is not None})
 
 
 def process_csv(inp: str, out: str) -> List[Dict[str, Any]]:
-    """
-    Process a CSV file and write results with scores.
-
-    Args:
-        inp: input CSV file path
-        out: output CSV file path
-
-    Returns:
-        list of result row dicts
-    """
-    # Validate paths
-    inp_path = _validate_safe_path(inp, must_exist=True)
-    out_path = _validate_safe_path(out, must_exist=False)
-
-    with open(inp_path, newline="", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
-        fn = reader.fieldnames or []
-
-    results = []
-    for row in rows:
-        res = assess_row(row)
-        merged = {
-            **row,
-            "score": res["score"],
-            "tier": res["tier"],
-            "category": res["category"],
-            "detail": ";".join(res["detail"].keys()),
-        }
-        results.append(merged)
-
-    with open(out_path, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=list(fn) + ["score", "tier", "category", "detail"])
-        w.writeheader()
-        w.writerows(results)
-
+    """Read q1..q10 CSV columns and write results after input validation."""
+    if os.path.realpath(inp) == os.path.realpath(out):
+        raise ValueError("Input and output must be different files")
+    with open(inp, encoding="utf-8-sig", newline="") as stream:
+        reader = csv.DictReader(stream)
+        headers = reader.fieldnames or []
+        normalized = [h.strip().lower() for h in headers]
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("Duplicate CSV column names")
+        missing = set(QUESTION_IDS) - set(normalized)
+        if missing:
+            raise ValueError("Missing CSV columns: " + ", ".join(sorted(missing)))
+        if any(h in normalized for h in ("score", "category", "detail")):
+            raise ValueError("Input CSV already contains output columns")
+        results = []
+        for line_no, row in enumerate(reader, start=2):
+            if None in row:
+                raise ValueError(f"CSV row {line_no} has more cells than headers")
+            try:
+                scored = assess_row(row)
+            except ValueError as exc:
+                raise ValueError(f"CSV row {line_no}: {exc}") from exc
+            results.append({**row, "score": scored["score"], "category": scored["category"],
+                            "detail": ";".join(f"{k}:{v['points']:+d}" for k, v in scored["detail"].items())})
+    with open(out, "w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=headers + ["score", "category", "detail"])
+        writer.writeheader()
+        writer.writerows(results)
     return results
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """Build the CLI argument parser."""
-    p = argparse.ArgumentParser(prog="naranjo", description="Naranjo ADR Probability Scale")
-    sub = p.add_subparsers(dest="cmd", required=True)
-
-    # Single assessment
-    s = sub.add_parser("single", help="Assess a single case")
-    s.add_argument("--age", type=float, help="Patient age")
-    s.add_argument("--sex", help="Patient sex (M/F)")
-    for name, _ in FACTORS:
-        flag = "--" + name.lower().replace(" ", "_").replace(">", "_gt_").replace("/", "_")
-        s.add_argument(flag, default="0", help=f"Presence of {name}")
-    s.add_argument("--json", help="JSON string of factor presence dict")
-
-    # Batch processing
-    b = sub.add_parser("batch", help="Batch process CSV file")
-    b.add_argument("--input", required=True, help="Input CSV file path")
-    b.add_argument("--output", required=True, help="Output CSV file path")
-
-    return p
-
-
 def main(argv: Optional[List[str]] = None) -> int:
-    """Main CLI entry point."""
-    import json as _json
-
-    p = build_parser()
-    a = p.parse_args(argv)
-
-    if a.cmd == "single":
-        if a.json:
-            try:
-                present = _json.loads(a.json)
-            except _json.JSONDecodeError as e:
-                print(f"Error: Invalid JSON: {e}", file=sys.stderr)
-                return 1
+    parser = argparse.ArgumentParser(description="10-question Naranjo ADR causality assessment")
+    commands = parser.add_subparsers(dest="command", required=True)
+    single = commands.add_parser("single", help="Score a single case")
+    single.add_argument("--json", help="JSON object with q1 through q10 answers")
+    for key in QUESTION_IDS:
+        single.add_argument(f"--{key}", choices=("yes", "no", "unknown"))
+    batch = commands.add_parser("batch", help="Score CSV with q1 through q10 columns")
+    batch.add_argument("--input", required=True)
+    batch.add_argument("--output", required=True)
+    args = parser.parse_args(argv)
+    try:
+        if args.command == "single":
+            if args.json and any(getattr(args, key) is not None for key in QUESTION_IDS):
+                raise ValueError("Use either --json or --q1..--q10, not both")
+            responses = json.loads(args.json) if args.json is not None else {k: getattr(args, k) for k in QUESTION_IDS if getattr(args, k) is not None}
+            print(json.dumps(calculate_score(responses), indent=2))
         else:
-            present = {k: v for k, v in vars(a).items() if k not in ("cmd", "json")}
-        res = calculate_score(present)
-        print(res)
+            rows = process_csv(args.input, args.output)
+            print(f"Scored {len(rows)} cases -> {args.output}")
         return 0
-
-    if a.cmd == "batch":
-        try:
-            res = process_csv(a.input, a.output)
-            print(f"Processed {len(res)} -> {a.output}")
-            return 0
-        except FileNotFoundError as e:
-            print(f"Error: {e}", file=sys.stderr)
-            return 1
-        except (OSError, csv.Error) as e:
-            print(f"Error processing CSV: {e}", file=sys.stderr)
-            return 1
-
-    p.print_help()
-    return 1
+    except (TypeError, ValueError, OSError, csv.Error) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

@@ -1,40 +1,38 @@
-name: Naranjo Adr Probability CI/CD & Security Verification
-
+name: Tests and static checks
 on:
   push:
-    branches: [ master, main ]
+    branches: [master]
   pull_request:
-    branches: [ master, main ]
-
+    branches: [master]
+permissions:
+  contents: read
 jobs:
-  test-and-audit:
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-
     steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install fastapi uvicorn pydantic pytest
-
-    - name: Run Pytest Suite
-      run: |
-        pytest -v
-
-    - name: Security SAST & Zero-PHI Audit
-      run: |
-        python -c "
-        from agents.base import PHIGuard, AuditLogger
-        import pytest
-        assert AuditLogger.verify_integrity() is True
-        print('Security & Zero-PHI Audit Passed!')
-        "
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install project and test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Check dependency consistency and Python syntax
+        run: |
+          python -m pip check
+          python -m compileall -q .
+      - name: Unit and regression tests
+        run: python -m pytest -q
+      - name: Batch CSV smoke test
+        run: |
+          python naranjo.py batch --input sample.csv --output /tmp/naranjo-scored.csv
+          test -s /tmp/naranjo-scored.csv
+      - name: Browser static asset parity and script syntax
+        run: |
+          cmp docs/index.html web/index.html
+          python -c "from pathlib import Path; h=Path('docs/index.html').read_text(); Path('/tmp/naranjo-app.js').write_text(h.split('<script>')[1].split('</script>')[0])"
+          node --check /tmp/naranjo-app.js

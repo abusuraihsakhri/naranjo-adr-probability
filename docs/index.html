@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Private, browser-based Naranjo adverse drug reaction causality calculator">
+<title>Naranjo ADR Probability Scale</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#172435;background:#f4f7fa}
+*{box-sizing:border-box}body{margin:0}main{max-width:940px;margin:auto;padding:30px 18px 60px}
+h1{font-size:clamp(1.6rem,3vw,2.2rem);margin:4px 0}h2{font-size:1.2rem}
+p{color:#516174;line-height:1.6}a{color:#075a69}
+.tag{color:#075a69;font-size:.8rem;text-transform:uppercase;font-weight:700;letter-spacing:.12em}
+.panel{background:white;border:1px solid #dce3eb;border-radius:12px;padding:22px;margin:18px 0}
+.question{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:15px;align-items:center;padding:13px 0;border-bottom:1px solid #dce3eb}
+.question:last-child{border:0}.question label{font-weight:570}
+.question strong{display:inline-block;width:2.4em;color:#075a69}
+select{width:100%;padding:10px;border:1px solid #8398aa;border-radius:6px;background:#fff;color:inherit;font:inherit}
+button{border:1px solid #075a69;background:#075a69;color:white;padding:10px 16px;font:inherit;font-weight:650;cursor:pointer;border-radius:6px}
+button.secondary{background:white;color:#075a69}.buttons{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+:focus-visible{outline:3px solid #168da4;outline-offset:2px}
+.score{font-size:2.8rem;color:#075a69;font-weight:750}.category{text-transform:capitalize;font-size:1.45rem;font-weight:700}
+.summary{display:flex;gap:32px;flex-wrap:wrap}.muted{font-size:.88rem;color:#516174}
+.error{color:#972a25;font-weight:700}table{width:100%;border-collapse:collapse;margin-top:16px}td,th{text-align:left;border-bottom:1px solid #dce3eb;padding:8px}td:last-child,th:last-child{text-align:right}
+footer{font-size:.88rem;color:#516174} [hidden]{display:none!important}
+@media(max-width:620px){.question{grid-template-columns:1fr;gap:5px}.panel{padding:15px}}
+@media print{body{background:white}.buttons,footer{display:none}.panel{break-inside:avoid}}
+</style></head>
+<body><main>
+<header><div class="tag">Clinical causality assessment</div><h1>Naranjo ADR Probability Scale</h1>
+<p>Answer all ten questions for a specific suspected drug and adverse event. “Do not know” is a distinct response and always scores zero.</p></header>
+<section class="panel" aria-labelledby="questions-title"><h2 id="questions-title">Questionnaire</h2>
+<form id="assessment" novalidate><div id="questions"></div>
+<p class="muted">No patient identifiers are requested. All scoring occurs in your browser without network requests or local storage.</p>
+<p id="error" class="error" role="alert" hidden></p>
+<div class="buttons"><button type="submit">Calculate score</button><button type="reset" class="secondary">Clear answers</button></div></form></section>
+<section class="panel" id="result" aria-labelledby="result-title" hidden>
+<h2 id="result-title">Assessment result</h2><div class="summary">
+<div><div class="muted">Score</div><div id="score" class="score" aria-live="polite"></div></div>
+<div><div class="muted">Causality category</div><div id="category" class="category"></div></div></div>
+<p>≤0 doubtful · 1–4 possible · 5–8 probable · ≥9 definite. Categories are not calibrated probabilities or clinical severity grades.</p>
+<div style="overflow-x:auto"><table><thead><tr><th>Item</th><th>Response</th><th>Points</th></tr></thead><tbody id="breakdown"></tbody></table></div>
+<div class="buttons"><button type="button" id="download">Export CSV</button><button type="button" class="secondary" id="print">Print</button></div></section>
+<footer><p>For professional assessment support only; clinical judgment is essential. Do not perform unsafe rechallenge or placebo experiments to answer questions. Reference: Naranjo et al., <em>Clin Pharmacol Ther.</em> 1981;30:239–245. <a href="https://www.ncbi.nlm.nih.gov/books/NBK548069/table/Narajo.Tc/" rel="noopener noreferrer">NIH/NLM scoring table</a>.</p></footer>
+</main><script>
+"use strict";
+const questions=[
+["q1","Previous conclusive reports of this reaction?",1,0],
+["q2","Adverse event appeared after the suspected drug was given?",2,-1],
+["q3","Reaction improved after withdrawal or a specific antagonist?",1,0],
+["q4","Reaction reappeared after readministration?",2,-1],
+["q5","Other causes could independently explain the reaction?",-1,2],
+["q6","Reaction reappeared after placebo administration?",-1,1],
+["q7","Drug detected at toxic concentration in blood or other fluids?",1,0],
+["q8","Reaction changed in severity with a change in dose?",1,0],
+["q9","Similar reaction to same or related drug on previous exposure?",1,0],
+["q10","Adverse event supported by objective evidence?",1,0]
+];
+const form=document.getElementById("assessment"),result=document.getElementById("result"),error=document.getElementById("error");
+let computed=null;
+for(const [key,question,yes,no] of questions){
+ const row=document.createElement("div");row.className="question";
+ const label=document.createElement("label");label.htmlFor=key;
+ const num=document.createElement("strong");num.textContent=key.slice(1).padStart(2,"0")+".";
+ label.append(num,document.createTextNode(question));
+ const select=document.createElement("select");select.id=key;select.name=key;select.required=true;
+ for(const [value,title] of [["","Select response"],["yes",`Yes (${yes>0?"+":""}${yes})`],["no",`No (${no>0?"+":""}${no})`],["unknown","Do not know (0)"]]){
+ const opt=document.createElement("option");opt.value=value;opt.textContent=title;select.append(opt);
+ }
+ row.append(label,select);document.getElementById("questions").append(row);
+}
+form.addEventListener("submit",event=>{
+ event.preventDefault();error.hidden=true;
+ const missing=questions.find(([key])=>!document.getElementById(key).value);
+ if(missing){error.textContent="Answer all ten questions, using ‘Do not know’ when needed.";error.hidden=false;document.getElementById(missing[0]).focus();result.hidden=true;computed=null;return;}
+ const answers=questions.map(([key,,yes,no])=>{const answer=document.getElementById(key).value;return {key,answer,points:answer==="yes"?yes:answer==="no"?no:0};});
+ const score=answers.reduce((sum,item)=>sum+item.points,0);
+ const category=score>=9?"definite":score>=5?"probable":score>=1?"possible":"doubtful";
+ document.getElementById("score").textContent=(score>0?"+":"")+score;
+ document.getElementById("category").textContent=category;
+ const tbody=document.getElementById("breakdown");tbody.replaceChildren();
+ for(const item of answers){const row=document.createElement("tr");
+ for(const text of [item.key,item.answer,item.points>0?"+"+item.points:String(item.points)]){const cell=document.createElement("td");cell.textContent=text;row.append(cell);}
+ tbody.append(row);}
+ computed={score,category,answers};result.hidden=false;result.scrollIntoView({block:"nearest"});
+});
+form.addEventListener("change",()=>{result.hidden=true;error.hidden=true;computed=null;});
+form.addEventListener("reset",()=>{result.hidden=true;error.hidden=true;computed=null;});
+document.getElementById("download").addEventListener("click",()=>{
+ if(!computed)return;
+ const rows=["question,answer,points",...computed.answers.map(a=>`${a.key},${a.answer},${a.points}`),`total,,${computed.score}`,`category,${computed.category},`];
+ const href=URL.createObjectURL(new Blob([rows.join("\r\n")+"\r\n"],{type:"text/csv;charset=utf-8"}));
+ const link=document.createElement("a");link.href=href;link.download="naranjo-assessment.csv";link.click();setTimeout(()=>URL.revokeObjectURL(href),0);
+});
+document.getElementById("print").addEventListener("click",()=>window.print());
+</script></body></html>

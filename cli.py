@@ -80,44 +80,54 @@ def main(argv=None):
         return 0
 
     if args.command == "batch":
-        # Validate input file exists and path is safe
         import os
-        if not os.path.isfile(args.input):
-            print(f"Error: Input file not found: {args.input}", file=sys.stderr)
-            return 1
-        if "\x00" in args.input:
-            print("Error: Invalid path", file=sys.stderr)
-            return 1
-        with open(args.input, mode="r", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f)
-            fieldnames = list(reader.fieldnames or [])
-            rows = list(reader)
 
-        out_fields = fieldnames + ["overall_urgency", "integrity_status", "total_alerts", "audit_hash"]
-        out_rows = []
-        for r in rows:
-            payload = SystemTaskPayload(
-                task_id=r.get("task_id", "TASK-01"),
-                target_identifier=r.get("target_identifier", "TARGET-01"),
-                primary_metric=float(r.get("primary_metric", 15.0)),
-                secondary_metric=float(r.get("secondary_metric", 5.0)),
-                status_descriptor=r.get("status_descriptor", "NOMINAL"),
-                is_critical_flag=bool(r.get("is_critical_flag", False)),
-            )
-            dossier = supervisor.process_task(payload)
-            row_dict = dict(r)
-            row_dict["overall_urgency"] = dossier.overall_urgency.value
-            row_dict["integrity_status"] = dossier.integrity_status.value
-            row_dict["total_alerts"] = dossier.total_alerts
-            row_dict["audit_hash"] = dossier.audit_hash
-            out_rows.append(row_dict)
+        def parse_flag(value):
+            text = str(value if value is not None else "false").strip().lower()
+            if text in ("true", "1", "yes", "y"):
+                return True
+            if text in ("false", "0", "no", "n", ""):
+                return False
+            raise ValueError(f"Invalid is_critical_flag: {value!r}")
 
-        with open(args.output, mode="w", encoding="utf-8", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=out_fields)
-            writer.writeheader()
-            writer.writerows(out_rows)
-        print(f"Processed {len(out_rows)} records -> {args.output}")
-        return 0
+        try:
+            if "\x00" in args.input or "\x00" in args.output:
+                raise ValueError("Invalid file path")
+            if os.path.realpath(args.input) == os.path.realpath(args.output):
+                raise ValueError("Input and output must differ")
+            with open(args.input, newline="", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                fieldnames = list(reader.fieldnames or [])
+                rows = list(reader)
+            out_fields = ["overall_urgency", "integrity_status", "total_alerts", "audit_hash"]
+            if any(name in fieldnames for name in out_fields):
+                raise ValueError("Input CSV already contains output columns")
+            if any(None in row for row in rows):
+                raise ValueError("A CSV row has more cells than the header")
+            out_rows = []
+            for r in rows:
+                payload = SystemTaskPayload(
+                    task_id=r.get("task_id") or "TASK-01",
+                    target_identifier=r.get("target_identifier") or "TARGET-01",
+                    primary_metric=float(r.get("primary_metric") or 15.0),
+                    secondary_metric=float(r.get("secondary_metric") or 5.0),
+                    status_descriptor=r.get("status_descriptor") or "NOMINAL",
+                    is_critical_flag=parse_flag(r.get("is_critical_flag")),
+                )
+                dossier = supervisor.process_task(payload)
+                out_rows.append({**r, "overall_urgency": dossier.overall_urgency.value,
+                                 "integrity_status": dossier.integrity_status.value,
+                                 "total_alerts": dossier.total_alerts,
+                                 "audit_hash": dossier.audit_hash})
+            with open(args.output, mode="w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames + out_fields)
+                writer.writeheader()
+                writer.writerows(out_rows)
+            print(f"Processed {len(out_rows)} records -> {args.output}")
+            return 0
+        except (OSError, ValueError, csv.Error) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
 
     if args.command == "serve":
         import uvicorn

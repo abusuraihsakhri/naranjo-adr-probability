@@ -1,156 +1,71 @@
-"""Tests for core Naranjo ADR scoring module."""
-import os
-import tempfile
-import naranjo as m
+"""Regression tests against the published ten-item Naranjo scoring table."""
+import csv
+import itertools
+import json
+import pytest
+from naranjo import QUESTIONS, calculate_score, assess_row, process_csv, main
 
+UNKNOWN = {f"q{i}": "unknown" for i in range(1, 11)}
 
-def test_score_basic():
-    """Basic score calculation with age and sex fields."""
-    r = m.calculate_score({'age': 68, 'sex': 'M', 'cancer': 1})
-    assert 'score' in r and 'tier' in r
-    assert 'category' in r
+def test_maximum_and_minimum():
+    max_answers = {f"q{i}": "yes" for i in range(1, 11)}
+    max_answers.update(q5="no", q6="no")
+    positive = calculate_score(max_answers)
+    assert positive["score"] == 13 and positive["category"] == "definite"
+    negative = calculate_score(dict(UNKNOWN, q2="no", q4="no", q5="yes", q6="yes"))
+    assert negative["score"] == -4 and negative["category"] == "doubtful"
 
+def test_response_weights():
+    for key, _, yes, no in QUESTIONS:
+        for answer, expected in (("yes", yes), ("no", no), ("unknown", 0)):
+            result = calculate_score(dict(UNKNOWN, **{key: answer}))
+            assert result["detail"][key]["points"] == expected
 
-def test_score_comparison():
-    """Older patient with comorbidities scores higher than younger healthy."""
-    r = m.calculate_score({'age': 68, 'sex': 'M', 'cancer': 1})
-    r2 = m.calculate_score({'age': 30, 'sex': 'F'})
-    assert r2['score'] <= r['score']
+@pytest.mark.parametrize("score,category", [(0,"doubtful"),(1,"possible"),(4,"possible"),(5,"probable"),(8,"probable"),(9,"definite")])
+def test_thresholds(score, category):
+    # Find a questionnaire response pattern realizing each score.
+    for values in itertools.product(("yes","no","unknown"), repeat=10):
+        answers = dict(zip((q[0] for q in QUESTIONS), values))
+        result = calculate_score(answers)
+        if result["score"] == score:
+            assert result["category"] == category
+            break
+    else:
+        pytest.fail("Expected score is unreachable")
 
+def test_unknown_differs_from_no():
+    assert calculate_score(UNKNOWN)["score"] == 0
+    assert calculate_score(dict(UNKNOWN, q5="no"))["score"] == 2
 
-def test_score_with_factors():
-    """Direct factor presence increases score."""
-    r = m.calculate_score({'Hypotension': True, 'Tachycardia': True, 'Fever': True})
-    assert r['score'] == 3
-    assert r['tier'] == 'moderate'
-    assert 'Hypotension' in r['detail']
-
-
-def test_score_with_zero_factors():
-    """No factors present yields zero score."""
-    r = m.calculate_score({})
-    assert r['score'] == 0
-    assert r['tier'] == 'low'
-    assert r['category'] == 'doubtful'
-
-
-def test_score_with_string_values():
-    """String 'yes'/'no' values are handled correctly."""
-    r = m.calculate_score({'hypotension': 'yes', 'tachycardia': 'no', 'fever': '1'})
-    assert r['score'] == 2
-
-
-def test_score_with_integer_values():
-    """Integer 1/0 values are handled correctly."""
-    r = m.calculate_score({'hypotension': 1, 'tachycardia': 0, 'fever': 1, 'tachypnea': 1})
-    assert r['score'] == 3
-
-
-def test_score_invalid_input():
-    """Non-dict input raises TypeError."""
-    import pytest
+def test_invalid_input_rejected():
     with pytest.raises(TypeError):
-        m.calculate_score("not a dict")
+        calculate_score([])
+    with pytest.raises(ValueError, match="Missing"):
+        calculate_score({"q1": "yes"})
+    with pytest.raises(ValueError, match="Invalid response"):
+        calculate_score(dict(UNKNOWN, q1="1"))
 
+def test_csv_roundtrip_and_cli(tmp_path, capsys):
+    source, output = tmp_path/"input.csv", tmp_path/"output.csv"
+    with source.open("w", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=["case_id"] + list(UNKNOWN))
+        writer.writeheader()
+        writer.writerow({"case_id": "CASE-01", **UNKNOWN})
+    assert process_csv(str(source), str(output))[0]["score"] == 0
+    assert main(["batch", "--input", str(source), "--output", str(output)]) == 0
+    with output.open(newline="") as file:
+        row = next(csv.DictReader(file))
+        assert row["category"] == "doubtful"
+    assert assess_row({k.upper(): v for k, v in UNKNOWN.items()})["score"] == 0
+    assert main(["single", "--json", json.dumps(UNKNOWN)]) == 0
+    assert main(["single", "--q1", "yes"]) == 1
+    assert "Missing Naranjo" in capsys.readouterr().err
 
-def test_score_categories():
-    """Score categories are correctly assigned."""
-    # doubtful: score <= 0
-    assert m.calculate_score({})['category'] == 'doubtful'
-    # possible: score 1-4
-    assert m.calculate_score({'Hypotension': 1, 'Tachycardia': 1})['category'] == 'possible'
-    # probable: score 5-8 (all 5 factors = score 5)
-    all_factors = {f: 1 for f, _ in m.FACTORS}
-    r = m.calculate_score(all_factors)
-    assert r['score'] == 5
-    assert r['category'] == 'probable'
-
-
-def test_assess_row():
-    """assess_row processes CSV row dicts correctly."""
-    row = {'patient_id': 'P001', 'hypotension': '1', 'tachycardia': '1', 'fever': '0'}
-    r = m.assess_row(row)
-    assert r['score'] == 2
-
-
-def test_assess_row_invalid():
-    """assess_row rejects non-dict input."""
-    import pytest
-    with pytest.raises(TypeError):
-        m.assess_row("not a dict")
-
-
-def test_process_csv():
-    """process_csv reads input and writes scored output."""
-    # Create a temporary input CSV
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, newline='') as f:
-        f.write('patient_id,hypotension,tachycardia,fever\n')
-        f.write('P001,1,1,0\n')
-        f.write('P002,0,0,0\n')
-        inp = f.name
-
-    out = inp.replace('.csv', '_out.csv')
-    try:
-        results = m.process_csv(inp, out)
-        assert len(results) == 2
-        assert results[0]['score'] == 2
-        assert results[1]['score'] == 0
-        assert os.path.exists(out)
-
-        # Verify output CSV structure
-        import csv
-        with open(out, newline='') as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-            assert 'score' in rows[0]
-            assert 'tier' in rows[0]
-            assert 'category' in rows[0]
-    finally:
-        os.unlink(inp)
-        if os.path.exists(out):
-            os.unlink(out)
-
-
-def test_process_csv_missing_file():
-    """process_csv raises FileNotFoundError for missing input."""
-    import pytest
-    with pytest.raises(FileNotFoundError):
-        m.process_csv('/nonexistent/path/input.csv', '/tmp/output.csv')
-
-
-def test_process_csv_null_bytes():
-    """process_csv rejects paths with null bytes."""
-    import pytest
-    with pytest.raises(ValueError):
-        m.process_csv('input\x00.csv', 'output.csv')
-
-
-def test_cli_single():
-    """CLI single command works."""
-    result = m.main(['single', '--hypotension', '1', '--fever', '1'])
-    assert result == 0
-
-
-def test_cli_batch_missing_file():
-    """CLI batch command returns error for missing file."""
-    result = m.main(['batch', '--input', '/nonexistent/file.csv', '--output', '/tmp/out.csv'])
-    assert result == 1
-
-
-def test_cli_invalid_json():
-    """CLI single with invalid JSON returns error."""
-    result = m.main(['single', '--json', '{invalid json}'])
-    assert result == 1
-
-
-def test_normalize_value():
-    """_normalize_value handles various types correctly."""
-    assert m._normalize_value(True) is True
-    assert m._normalize_value(1) is True
-    assert m._normalize_value("yes") is True
-    assert m._normalize_value("Y") is True
-    assert m._normalize_value("present") is True
-    assert m._normalize_value(False) is False
-    assert m._normalize_value(0) is False
-    assert m._normalize_value("no") is False
-    assert m._normalize_value(None) is False
+def test_csv_malformed_does_not_create_output(tmp_path):
+    source, output = tmp_path/"bad.csv", tmp_path/"output.csv"
+    source.write_text("q1,q2\nyes,no\n")
+    with pytest.raises(ValueError, match="Missing CSV columns"):
+        process_csv(str(source), str(output))
+    assert not output.exists()
+    with pytest.raises(ValueError, match="different"):
+        process_csv(str(source), str(source))
