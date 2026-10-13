@@ -1,4 +1,4 @@
-patient_id,age,sex,prior_vte,cancer,immobility,surgery
-P001,68,M,0,1,1,0
-P002,45,F,0,0,0,1
-P003,71,M,1,0,1,1
+case_id,q1,q2,q3,q4,q5,q6,q7,q8,q9,q10
+CASE-001,yes,yes,yes,unknown,no,unknown,unknown,yes,unknown,yes
+CASE-002,unknown,yes,unknown,unknown,yes,unknown,unknown,unknown,no,unknown
+CASE-003,unknown,unknown,unknown,unknown,unknown,unknown,unknown,unknown,unknown,unknown
