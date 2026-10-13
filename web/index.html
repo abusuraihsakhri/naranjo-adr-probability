@@ -1,236 +1,95 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Naranjo Adr Probability — Operations Console</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg: #090d16;
-            --card: #111827;
-            --border: #1f293d;
-            --accent: #3b82f6;
-            --accent-glow: rgba(59, 130, 246, 0.25);
-            --text: #f3f4f6;
-            --text-muted: #9ca3af;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --success: #10b981;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            padding: 2rem;
-            min-height: 100vh;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        .header-title h1 { font-size: 1.6rem; font-weight: 700; color: #fff; }
-        .header-title p { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem; }
-        .badge {
-            display: inline-block;
-            padding: 0.3rem 0.8rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            background: var(--accent-glow);
-            color: var(--accent);
-            border: 1px solid var(--accent);
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1.2fr;
-            gap: 1.5rem;
-        }
-        .card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-        }
-        .card h2 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .form-group { margin-bottom: 1rem; }
-        label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem; }
-        input, select, textarea {
-            width: 100%;
-            padding: 0.65rem 0.9rem;
-            background: #0d1322;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: #fff;
-            font-family: inherit;
-            font-size: 0.9rem;
-        }
-        input:focus, textarea:focus { outline: none; border-color: var(--accent); }
-        .btn {
-            background: var(--accent);
-            color: #fff;
-            border: none;
-            padding: 0.7rem 1.4rem;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: 0.2s;
-            width: 100%;
-        }
-        .btn:hover { background: #2563eb; }
-        .terminal {
-            background: #060911;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            color: #10b981;
-            height: 380px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-        }
-        .metrics-bar {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .metric-box {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-        }
-        .metric-val { font-size: 1.4rem; font-weight: 700; color: #fff; margin-top: 0.25rem; }
-        .metric-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; }
-    </style>
-</head>
-<body>
-
-    <div class="header">
-        <div class="header-title">
-            <h1>Naranjo Adr Probability</h1>
-            <p>Domain: Clinical & Cryptographic AI | Standard: CAP / CLSI / NIST Standards | LabMind-Atlas Architecture</p>
-        </div>
-        <div>
-            <span class="badge">Air-Gapped Active</span>
-            <span class="badge" style="background: rgba(16,185,129,0.2); color: #10b981; border-color: #10b981;">Zero-PHI Guard Active</span>
-        </div>
-    </div>
-
-    <div class="metrics-bar">
-        <div class="metric-box">
-            <div class="metric-label">System Status</div>
-            <div class="metric-val" style="color: var(--success);" id="m-status">OPTIMAL</div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Tasks Processed</div>
-            <div class="metric-val" id="m-tasks">142</div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Audit Blocks Signed</div>
-            <div class="metric-val" id="m-audit">142</div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">PHI Interceptions</div>
-            <div class="metric-val" style="color: var(--accent);" id="m-phi">0</div>
-        </div>
-    </div>
-
-    <div class="grid">
-        <div class="card">
-            <h2>⚙️ Dispatch Distributed Component Audit</h2>
-            <div class="form-group">
-                <label>Task / Sample ID</label>
-                <input type="text" id="task_id" value="TASK-2026-LIVE-01">
-            </div>
-            <div class="form-group">
-                <label>Target Identifier</label>
-                <input type="text" id="target_id" value="SPECIMEN-ALPHA-77">
-            </div>
-            <div class="form-group">
-                <label>Primary Measurement / Value</label>
-                <input type="number" id="primary_metric" value="29.4" step="0.1">
-            </div>
-            <div class="form-group">
-                <label>Secondary Metric / Kinetic Index</label>
-                <input type="number" id="secondary_metric" value="14.8" step="0.1">
-            </div>
-            <div class="form-group">
-                <label>Status / Phenotype Descriptor</label>
-                <input type="text" id="status_descriptor" value="DISCORDANT_ANOMALY">
-            </div>
-            <div class="form-group">
-                <label><input type="checkbox" id="is_critical" checked> Trigger Emergency / Critical Flag</label>
-            </div>
-            <button class="btn" onclick="runAudit()">Execute Distributed Component Audit</button>
-        </div>
-
-        <div class="card">
-            <h2>📊 Real-Time Consensus Dossier & Audit Log</h2>
-            <div class="terminal" id="outputConsole">// Naranjo Adr Probability Operations Console Ready
-// Connection established with Air-Gapped Supervisor
-// Cryptographic HMAC-SHA256 audit ledger loaded.
-// Ready for live task payload dispatch...</div>
-        </div>
-    </div>
-
-    <script>
-        async function runAudit() {
-            const consoleEl = document.getElementById('outputConsole');
-            consoleEl.innerText = "// Dispatching task across specialized workers...
-// Invoking InvariantQCWorker, SafetyEscalationWorker, ProtocolWorker...";
-
-            const payload = {
-                task_id: document.getElementById('task_id').value,
-                target_identifier: document.getElementById('target_id').value,
-                primary_metric: parseFloat(document.getElementById('primary_metric').value),
-                secondary_metric: parseFloat(document.getElementById('secondary_metric').value),
-                status_descriptor: document.getElementById('status_descriptor').value,
-                is_critical_flag: document.getElementById('is_critical').checked
-            };
-
-            try {
-                const res = await fetch('/api/audit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                consoleEl.innerText = JSON.stringify(data, null, 2);
-                document.getElementById('m-tasks').innerText = parseInt(document.getElementById('m-tasks').innerText) + 1;
-                document.getElementById('m-audit').innerText = parseInt(document.getElementById('m-audit').innerText) + 1;
-            } catch (err) {
-                consoleEl.innerText = "// Offline / Simulation Output:\n" + JSON.stringify({
-                    dossier_id: "DOSSIER-SIM-" + Math.floor(Math.random()*10000),
-                    system: "naranjo-adr-probability",
-                    domain: "Clinical & Cryptographic AI",
-                    task_id: payload.task_id,
-                    overall_urgency: payload.is_critical_flag ? "CRITICAL_STAT_PANIC" : "ELEVATED_RISK",
-                    integrity_status: "DISCORDANT_ANOMALY",
-                    alerts: [
-                        { worker: "InvariantQCWorker", alert: "Primary metric exceeds upper reference bound" },
-                        { worker: "SafetyEscalationWorker", alert: "Critical emergency interlock flag active" }
-                    ],
-                    audit_hash: "HMAC_SHA256_e83f9a72b941d6c381f9"
-                }, null, 2);
-            }
-        }
-    </script>
-</body>
-</html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Private, browser-based Naranjo adverse drug reaction causality calculator">
+<title>Naranjo ADR Probability Scale</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#172435;background:#f4f7fa}
+*{box-sizing:border-box}body{margin:0}main{max-width:940px;margin:auto;padding:30px 18px 60px}
+h1{font-size:clamp(1.6rem,3vw,2.2rem);margin:4px 0}h2{font-size:1.2rem}
+p{color:#516174;line-height:1.6}a{color:#075a69}
+.tag{color:#075a69;font-size:.8rem;text-transform:uppercase;font-weight:700;letter-spacing:.12em}
+.panel{background:white;border:1px solid #dce3eb;border-radius:12px;padding:22px;margin:18px 0}
+.question{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:15px;align-items:center;padding:13px 0;border-bottom:1px solid #dce3eb}
+.question:last-child{border:0}.question label{font-weight:570}
+.question strong{display:inline-block;width:2.4em;color:#075a69}
+select{width:100%;padding:10px;border:1px solid #8398aa;border-radius:6px;background:#fff;color:inherit;font:inherit}
+button{border:1px solid #075a69;background:#075a69;color:white;padding:10px 16px;font:inherit;font-weight:650;cursor:pointer;border-radius:6px}
+button.secondary{background:white;color:#075a69}.buttons{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+:focus-visible{outline:3px solid #168da4;outline-offset:2px}
+.score{font-size:2.8rem;color:#075a69;font-weight:750}.category{text-transform:capitalize;font-size:1.45rem;font-weight:700}
+.summary{display:flex;gap:32px;flex-wrap:wrap}.muted{font-size:.88rem;color:#516174}
+.error{color:#972a25;font-weight:700}table{width:100%;border-collapse:collapse;margin-top:16px}td,th{text-align:left;border-bottom:1px solid #dce3eb;padding:8px}td:last-child,th:last-child{text-align:right}
+footer{font-size:.88rem;color:#516174} [hidden]{display:none!important}
+@media(max-width:620px){.question{grid-template-columns:1fr;gap:5px}.panel{padding:15px}}
+@media print{body{background:white}.buttons,footer{display:none}.panel{break-inside:avoid}}
+</style></head>
+<body><main>
+<header><div class="tag">Clinical causality assessment</div><h1>Naranjo ADR Probability Scale</h1>
+<p>Answer all ten questions for a specific suspected drug and adverse event. “Do not know” is a distinct response and always scores zero.</p></header>
+<section class="panel" aria-labelledby="questions-title"><h2 id="questions-title">Questionnaire</h2>
+<form id="assessment" novalidate><div id="questions"></div>
+<p class="muted">No patient identifiers are requested. All scoring occurs in your browser without network requests or local storage.</p>
+<p id="error" class="error" role="alert" hidden></p>
+<div class="buttons"><button type="submit">Calculate score</button><button type="reset" class="secondary">Clear answers</button></div></form></section>
+<section class="panel" id="result" aria-labelledby="result-title" hidden>
+<h2 id="result-title">Assessment result</h2><div class="summary">
+<div><div class="muted">Score</div><div id="score" class="score" aria-live="polite"></div></div>
+<div><div class="muted">Causality category</div><div id="category" class="category"></div></div></div>
+<p>≤0 doubtful · 1–4 possible · 5–8 probable · ≥9 definite. Categories are not calibrated probabilities or clinical severity grades.</p>
+<div style="overflow-x:auto"><table><thead><tr><th>Item</th><th>Response</th><th>Points</th></tr></thead><tbody id="breakdown"></tbody></table></div>
+<div class="buttons"><button type="button" id="download">Export CSV</button><button type="button" class="secondary" id="print">Print</button></div></section>
+<footer><p>For professional assessment support only; clinical judgment is essential. Do not perform unsafe rechallenge or placebo experiments to answer questions. Reference: Naranjo et al., <em>Clin Pharmacol Ther.</em> 1981;30:239–245. <a href="https://www.ncbi.nlm.nih.gov/books/NBK548069/table/Narajo.Tc/" rel="noopener noreferrer">NIH/NLM scoring table</a>.</p></footer>
+</main><script>
+"use strict";
+const questions=[
+["q1","Previous conclusive reports of this reaction?",1,0],
+["q2","Adverse event appeared after the suspected drug was given?",2,-1],
+["q3","Reaction improved after withdrawal or a specific antagonist?",1,0],
+["q4","Reaction reappeared after readministration?",2,-1],
+["q5","Other causes could independently explain the reaction?",-1,2],
+["q6","Reaction reappeared after placebo administration?",-1,1],
+["q7","Drug detected at toxic concentration in blood or other fluids?",1,0],
+["q8","Reaction changed in severity with a change in dose?",1,0],
+["q9","Similar reaction to same or related drug on previous exposure?",1,0],
+["q10","Adverse event supported by objective evidence?",1,0]
+];
+const form=document.getElementById("assessment"),result=document.getElementById("result"),error=document.getElementById("error");
+let computed=null;
+for(const [key,question,yes,no] of questions){
+ const row=document.createElement("div");row.className="question";
+ const label=document.createElement("label");label.htmlFor=key;
+ const num=document.createElement("strong");num.textContent=key.slice(1).padStart(2,"0")+".";
+ label.append(num,document.createTextNode(question));
+ const select=document.createElement("select");select.id=key;select.name=key;select.required=true;
+ for(const [value,title] of [["","Select response"],["yes",`Yes (${yes>0?"+":""}${yes})`],["no",`No (${no>0?"+":""}${no})`],["unknown","Do not know (0)"]]){
+ const opt=document.createElement("option");opt.value=value;opt.textContent=title;select.append(opt);
+ }
+ row.append(label,select);document.getElementById("questions").append(row);
+}
+form.addEventListener("submit",event=>{
+ event.preventDefault();error.hidden=true;
+ const missing=questions.find(([key])=>!document.getElementById(key).value);
+ if(missing){error.textContent="Answer all ten questions, using ‘Do not know’ when needed.";error.hidden=false;document.getElementById(missing[0]).focus();result.hidden=true;computed=null;return;}
+ const answers=questions.map(([key,,yes,no])=>{const answer=document.getElementById(key).value;return {key,answer,points:answer==="yes"?yes:answer==="no"?no:0};});
+ const score=answers.reduce((sum,item)=>sum+item.points,0);
+ const category=score>=9?"definite":score>=5?"probable":score>=1?"possible":"doubtful";
+ document.getElementById("score").textContent=(score>0?"+":"")+score;
+ document.getElementById("category").textContent=category;
+ const tbody=document.getElementById("breakdown");tbody.replaceChildren();
+ for(const item of answers){const row=document.createElement("tr");
+ for(const text of [item.key,item.answer,item.points>0?"+"+item.points:String(item.points)]){const cell=document.createElement("td");cell.textContent=text;row.append(cell);}
+ tbody.append(row);}
+ computed={score,category,answers};result.hidden=false;result.scrollIntoView({block:"nearest"});
+});
+form.addEventListener("change",()=>{result.hidden=true;error.hidden=true;computed=null;});
+form.addEventListener("reset",()=>{result.hidden=true;error.hidden=true;computed=null;});
+document.getElementById("download").addEventListener("click",()=>{
+ if(!computed)return;
+ const rows=["question,answer,points",...computed.answers.map(a=>`${a.key},${a.answer},${a.points}`),`total,,${computed.score}`,`category,${computed.category},`];
+ const href=URL.createObjectURL(new Blob([rows.join("\r\n")+"\r\n"],{type:"text/csv;charset=utf-8"}));
+ const link=document.createElement("a");link.href=href;link.download="naranjo-assessment.csv";link.click();setTimeout(()=>URL.revokeObjectURL(href),0);
+});
+document.getElementById("print").addEventListener("click",()=>window.print());
+</script></body></html>
